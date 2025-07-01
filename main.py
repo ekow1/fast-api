@@ -72,6 +72,29 @@ async def delete_item(item_id: int):
     items_db = [item for item in items_db if item["id"] != item_id]
     return {"message": f"Item {item_id} deleted"}
 
+@app.get("/items/stats")
+async def get_items_stats():
+    """Get statistics about the items in the database"""
+    if not items_db:
+        return {
+            "total_items": 0,
+            "average_price": 0,
+            "min_price": 0,
+            "max_price": 0,
+            "total_value": 0
+        }
+    
+    prices = [item["price"] for item in items_db if item.get("price") is not None]
+    total_value = sum(item["price"] + (item["tax"] or 0) for item in items_db if item.get("price") is not None)
+    
+    return {
+        "total_items": len(items_db),
+        "average_price": sum(prices) / len(prices) if prices else 0,
+        "min_price": min(prices) if prices else 0,
+        "max_price": max(prices) if prices else 0,
+        "total_value": total_value
+    }
+
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 8000))
     uvicorn.run(app, host="0.0.0.0", port=port)
