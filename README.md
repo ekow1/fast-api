@@ -88,6 +88,9 @@ The project includes a GitHub Actions workflow that:
    # SSH into your EC2 instance
    ssh -i your-key.pem ubuntu@your-ec2-ip
    
+   # Install curl first (if not already installed)
+   sudo apt install -y curl
+   
    # Download and run setup script
    curl -sSL https://raw.githubusercontent.com/ekow1/fastapi-service/main/deploy/setup-ec2.sh | bash
    ```
