@@ -1,0 +1,21 @@
+[Unit]
+Description=FastAPI Service
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/home/ubuntu/fastapi-service
+Environment=PATH=/home/ubuntu/.local/bin:/usr/local/bin:/usr/bin:/bin
+Environment=PORT=8000
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/home/ubuntu/.local/bin/uv run python main.py
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

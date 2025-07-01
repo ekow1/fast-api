@@ -67,22 +67,45 @@ uv run pytest tests/ -v
 
 ## Deployment
 
-### GitHub Actions
+### EC2 Deployment via GitHub Actions
 
 The project includes a GitHub Actions workflow that:
 1. Runs tests and linting
-2. Builds Docker image
-3. Pushes to AWS ECR
-4. Deploys to AWS ECS
+2. Deploys directly to EC2 via SSH
+3. Uses systemd to manage the service
+4. Sets up nginx as reverse proxy
 
-### AWS Setup Required
+### EC2 Setup Required
 
-1. Create an ECR repository named `fastapi-service`
-2. Create an ECS cluster named `fastapi-cluster`
-3. Create an ECS service named `fastapi-service`
-4. Add GitHub secrets:
-   - `AWS_ACCESS_KEY_ID`
-   - `AWS_SECRET_ACCESS_KEY`
+1. **Launch an EC2 instance:**
+   - Use Ubuntu 22.04 LTS AMI
+   - Instance type: t3.micro or larger
+   - Security group: Allow SSH (22), HTTP (80), HTTPS (443)
+   - Create or use existing key pair
+
+2. **Run setup script on EC2:**
+   ```bash
+   # SSH into your EC2 instance
+   ssh -i your-key.pem ubuntu@your-ec2-ip
+   
+   # Download and run setup script
+   curl -sSL https://raw.githubusercontent.com/ekow1/fastapi-service/main/deploy/setup-ec2.sh | bash
+   ```
+
+3. **Configure GitHub Secrets:**
+   Add these secrets to your GitHub repository:
+   - `EC2_HOST`: Your EC2 public IP address
+   - `EC2_USERNAME`: `ubuntu` (default for Ubuntu AMI)
+   - `EC2_SSH_KEY`: Your private SSH key content
+
+4. **Configure Nginx (optional):**
+   ```bash
+   # Copy nginx config and restart
+   sudo cp /home/ubuntu/fastapi-service/deploy/nginx-fastapi.conf /etc/nginx/sites-available/fastapi
+   sudo ln -s /etc/nginx/sites-available/fastapi /etc/nginx/sites-enabled/
+   sudo rm /etc/nginx/sites-enabled/default
+   sudo systemctl restart nginx
+   ```
 
 ## Environment Variables
 

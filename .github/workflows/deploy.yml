@@ -1,4 +1,4 @@
-name: Deploy FastAPI Service
+name: Deploy FastAPI Service to EC2
 
 on:
   push:
@@ -8,7 +8,6 @@ on:
 
 env:
   AWS_REGION: us-east-1
-  ECR_REPOSITORY: fastapi-service
 
 jobs:
   test:
@@ -40,7 +39,7 @@ jobs:
       run: |
         uv run black --check main.py
 
-  build-and-push:
+  deploy:
     needs: test
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
@@ -49,43 +48,50 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Configure AWS credentials
-      uses: aws-actions/configure-aws-credentials@v4
+    - name: Deploy to EC2
+      uses: appleboy/ssh-action@v1.0.3
       with:
-        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        aws-region: ${{ env.AWS_REGION }}
-
-    - name: Login to Amazon ECR
-      id: login-ecr
-      uses: aws-actions/amazon-ecr-login@v2
-
-    - name: Build, tag, and push image to Amazon ECR
-      env:
-        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-        IMAGE_TAG: ${{ github.sha }}
-      run: |
-        docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
-        docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:latest .
-        docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
-        docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
-
-  deploy:
-    needs: build-and-push
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
-    
-    steps:
-    - name: Configure AWS credentials
-      uses: aws-actions/configure-aws-credentials@v4
-      with:
-        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        aws-region: ${{ env.AWS_REGION }}
-
-    - name: Deploy to ECS
-      run: |
-        aws ecs update-service \
-          --cluster fastapi-cluster \
-          --service fastapi-service \
-          --force-new-deployment
+        host: ${{ secrets.EC2_HOST }}
+        username: ${{ secrets.EC2_USERNAME }}
+        key: ${{ secrets.EC2_SSH_KEY }}
+        port: 22
+        script: |
+          # Navigate to application directory
+          cd /home/${{ secrets.EC2_USERNAME }}/fastapi-service || {
+            echo "Creating application directory..."
+            mkdir -p /home/${{ secrets.EC2_USERNAME }}/fastapi-service
+            cd /home/${{ secrets.EC2_USERNAME }}/fastapi-service
+          }
+          
+          # Clone or pull latest code
+          if [ -d ".git" ]; then
+            echo "Updating existing repository..."
+            git pull origin main
+          else
+            echo "Cloning repository..."
+            git clone https://github.com/${{ github.repository }} .
+          fi
+          
+          # Stop existing service if running
+          sudo systemctl stop fastapi-service || echo "Service not running"
+          
+          # Install/update dependencies
+          if ! command -v uv &> /dev/null; then
+            echo "Installing uv..."
+            curl -LsSf https://astral.sh/uv/install.sh | sh
+            source ~/.bashrc
+          fi
+          
+          # Create virtual environment and install dependencies
+          uv sync
+          
+          # Copy systemd service file
+          sudo cp deploy/fastapi-service.service /etc/systemd/system/
+          sudo systemctl daemon-reload
+          
+          # Start and enable service
+          sudo systemctl enable fastapi-service
+          sudo systemctl start fastapi-service
+          
+          # Check service status
+          sudo systemctl status fastapi-service
